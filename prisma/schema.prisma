@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Customer {
+  id            String        @id @default(cuid())
+  name          String
+  phone         String?
+  email         String?
+  contactMethod String?
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  appointments  Appointment[]
+  tickets       Ticket[]
+  payments      Payment[]
+}
+
+model Appointment {
+  id            String    @id @default(cuid())
+  customerId    String
+  customer      Customer  @relation(fields: [customerId], references: [id])
+  startTime     DateTime
+  endTime       DateTime
+  type          String?
+  notes         String?
+  googleEventId String?
+  status        String    @default("scheduled")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Ticket {
+  id            String    @id @default(cuid())
+  ticketNumber  String    @unique
+  customerId    String
+  customer      Customer  @relation(fields: [customerId], references: [id])
+  garmentType   String
+  description   String?
+  alterations   String
+  status        String    @default("received")
+  dueDate       DateTime?
+  notifiedReady Boolean   @default(false)
+  price         Float?
+  paymentId     String?
+  payment       Payment?  @relation(fields: [paymentId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Payment {
+  id          String    @id @default(cuid())
+  customerId  String
+  customer    Customer  @relation(fields: [customerId], references: [id])
+  amount      Float
+  method      String
+  date        DateTime  @default(now())
+  notes       String?
+  tickets     Ticket[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
