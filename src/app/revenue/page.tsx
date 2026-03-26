@@ -27,8 +27,9 @@ interface Payment {
   method: string
   date: string
   notes?: string
-  customer: { id: string; name: string }
-  tickets: Array<{ ticketNumber: string }>
+  customerId: string
+  customerName: string
+  ticketIds: string[]
 }
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -53,13 +54,12 @@ export default function RevenuePage() {
   }, [year])
 
   const exportCSV = () => {
-    const headers = ['Date', 'Customer', 'Amount', 'Method', 'Tickets', 'Notes']
+    const headers = ['Date', 'Customer', 'Amount', 'Method', 'Notes']
     const rows = payments.map(p => [
       formatDate(p.date),
-      p.customer.name,
+      p.customerName,
       p.amount.toFixed(2),
       p.method,
-      p.tickets.map(t => t.ticketNumber).join('; '),
       p.notes || '',
     ])
     const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n')
@@ -175,8 +175,8 @@ export default function RevenuePage() {
                     <tr key={p.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm text-gray-500">{formatDate(p.date)}</td>
                       <td className="px-4 py-3">
-                        <Link href={`/customers/${p.customer.id}`} className="text-sm text-gray-900 hover:text-purple-600">
-                          {p.customer.name}
+                        <Link href={`/customers/${p.customerId}`} className="text-sm text-gray-900 hover:text-purple-600">
+                          {p.customerName}
                         </Link>
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">{formatCurrency(p.amount)}</td>

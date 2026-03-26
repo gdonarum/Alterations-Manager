@@ -13,7 +13,8 @@ interface DashboardData {
     endTime: string
     type: string
     notes?: string
-    customer: { name: string; phone?: string }
+    customerName: string
+    customerPhone?: string
   }>
   activeTickets: number
   readyTickets: number
@@ -96,7 +97,7 @@ export default function Dashboard() {
                 <div className="flex items-center gap-4">
                   <div className="text-sm font-medium text-purple-600 w-24">{formatTime(apt.startTime)}</div>
                   <div>
-                    <div className="font-medium text-gray-900">{apt.customer.name}</div>
+                    <div className="font-medium text-gray-900">{apt.customerName}</div>
                     <div className="text-sm text-gray-500 capitalize">{apt.type || 'Fitting'}</div>
                   </div>
                 </div>

@@ -1,38 +1,47 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { adminDb } from '@/lib/firebase-admin'
+import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const customer = await prisma.customer.findUnique({
-    where: { id },
-    include: {
-      appointments: { orderBy: { startTime: 'desc' } },
-      tickets: { orderBy: { createdAt: 'desc' } },
-      payments: { orderBy: { date: 'desc' } },
-    },
+  const doc = await adminDb.collection('customers').doc(id).get()
+  if (!doc.exists) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const [appts, tickets, payments] = await Promise.all([
+    adminDb.collection('appointments').where('customerId', '==', id).orderBy('startTime', 'desc').get(),
+    adminDb.collection('tickets').where('customerId', '==', id).orderBy('createdAt', 'desc').get(),
+    adminDb.collection('payments').where('customerId', '==', id).orderBy('date', 'desc').get(),
+  ])
+
+  const toDate = (v: unknown) => v instanceof Timestamp ? v.toDate().toISOString() : v
+
+  return NextResponse.json({
+    id: doc.id,
+    ...doc.data(),
+    appointments: appts.docs.map(d => ({ id: d.id, ...d.data(), startTime: toDate(d.data().startTime), endTime: toDate(d.data().endTime) })),
+    tickets: tickets.docs.map(d => ({ id: d.id, ...d.data(), createdAt: toDate(d.data().createdAt), dueDate: toDate(d.data().dueDate) })),
+    payments: payments.docs.map(d => ({ id: d.id, ...d.data(), date: toDate(d.data().date) })),
   })
-  if (!customer) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json(customer)
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const body = await req.json()
-  const customer = await prisma.customer.update({
-    where: { id },
-    data: {
-      name: body.name,
-      phone: body.phone || null,
-      email: body.email || null,
-      contactMethod: body.contactMethod || null,
-      notes: body.notes || null,
-    },
+  await adminDb.collection('customers').doc(id).update({
+    name: body.name,
+    phone: body.phone || null,
+    email: body.email || null,
+    contactMethod: body.contactMethod || null,
+    notes: body.notes || null,
+    updatedAt: FieldValue.serverTimestamp(),
   })
-  return NextResponse.json(customer)
+  return NextResponse.json({ id, ...body })
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  await prisma.customer.delete({ where: { id } })
+  await adminDb.collection('customers').doc(id).delete()
   return NextResponse.json({ success: true })
 }

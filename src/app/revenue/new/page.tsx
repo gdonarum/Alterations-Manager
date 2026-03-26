@@ -18,7 +18,7 @@ interface Ticket {
   garmentType: string
   price?: number
   status: string
-  customer: { id: string }
+  customerId: string
 }
 
 function NewPaymentContent() {
@@ -44,7 +44,7 @@ function NewPaymentContent() {
     if (form.customerId) {
       fetch(`/api/tickets?status=ready`)
         .then(r => r.json())
-        .then((data: Ticket[]) => setTickets(data.filter(t => t.customer?.id === form.customerId)))
+        .then((data: Ticket[]) => setTickets(data.filter(t => t.customerId === form.customerId)))
     }
   }, [form.customerId])
 

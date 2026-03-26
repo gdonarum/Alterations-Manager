@@ -1,6 +1,9 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { prisma } from '@/lib/prisma'
+import { adminDb } from '@/lib/firebase-admin'
+import { Timestamp } from 'firebase-admin/firestore'
 
 const client = new Anthropic()
 
@@ -25,10 +28,7 @@ Write a friendly, professional, brief text message (under 160 characters if poss
         max_tokens: 200,
         messages: [{ role: 'user', content: prompt }],
       })
-
-      return NextResponse.json({
-        message: message.content[0].type === 'text' ? message.content[0].text : '',
-      })
+      return NextResponse.json({ message: message.content[0].type === 'text' ? message.content[0].text : '' })
     }
 
     if (action === 'scheduling_suggestion') {
@@ -37,53 +37,44 @@ Write a friendly, professional, brief text message (under 160 characters if poss
 Date: ${date}
 Existing appointments: ${JSON.stringify(existingAppointments)}
 
-Suggest 3 available time slots (30 or 60 minutes each) for new appointments on this date, avoiding conflicts with existing ones. Format as JSON array: [{"start": "HH:MM", "end": "HH:MM", "label": "morning/afternoon/evening"}]`
+Suggest 3 available time slots (30 or 60 minutes each) for new appointments on this date, avoiding conflicts. Format as JSON array: [{"start": "HH:MM", "end": "HH:MM", "label": "morning/afternoon/evening"}]`
 
       const message = await client.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 300,
         messages: [{ role: 'user', content: prompt }],
       })
-
       const text = message.content[0].type === 'text' ? message.content[0].text : '[]'
       const jsonMatch = text.match(/\[[\s\S]*\]/)
-      const slots = jsonMatch ? JSON.parse(jsonMatch[0]) : []
-      return NextResponse.json({ slots })
+      return NextResponse.json({ slots: jsonMatch ? JSON.parse(jsonMatch[0]) : [] })
     }
 
     if (action === 'chat') {
       const { messages: chatMessages } = data
+      const today = new Date()
 
-      // Gather some context
-      const [activeTickets, todayAppts, recentPayments] = await Promise.all([
-        prisma.ticket.count({ where: { status: { in: ['received', 'in_progress'] } } }),
-        prisma.appointment.findMany({
-          where: {
-            startTime: {
-              gte: new Date(new Date().setHours(0, 0, 0, 0)),
-              lte: new Date(new Date().setHours(23, 59, 59, 999)),
-            },
-            status: 'scheduled',
-          },
-          include: { customer: true },
-        }),
-        prisma.payment.findMany({
-          take: 5,
-          orderBy: { date: 'desc' },
-          include: { customer: true },
-        }),
+      const [activeTicketsSnap, todayAppts, recentPayments] = await Promise.all([
+        adminDb.collection('tickets').where('status', 'in', ['received', 'in_progress']).count().get(),
+        adminDb.collection('appointments')
+          .where('startTime', '>=', Timestamp.fromDate(new Date(today.setHours(0, 0, 0, 0))))
+          .where('startTime', '<=', Timestamp.fromDate(new Date(today.setHours(23, 59, 59, 999))))
+          .get(),
+        adminDb.collection('payments').orderBy('date', 'desc').limit(5).get(),
       ])
+
+      const appts = todayAppts.docs.filter(d => d.data().status !== 'cancelled')
+        .map(d => `${d.data().customerName} at ${(d.data().startTime as Timestamp).toDate().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`)
+
+      const payments = recentPayments.docs.map(d => `$${d.data().amount} from ${d.data().customerName} via ${d.data().method}`)
 
       const systemPrompt = `You are an AI assistant for a home alterations business. You help the seamstress with scheduling, customer communication, and business management.
 
-Current business context:
-- Active tickets in progress: ${activeTickets}
-- Today's appointments: ${todayAppts.length} (${todayAppts.map(a => `${a.customer.name} at ${new Date(a.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`).join(', ') || 'none'})
-- Recent payments: ${recentPayments.map(p => `$${p.amount} from ${p.customer.name} via ${p.method}`).join(', ') || 'none'}
+Current context:
+- Active tickets in progress: ${activeTicketsSnap.data().count}
+- Today's appointments: ${appts.length > 0 ? appts.join(', ') : 'none'}
+- Recent payments: ${payments.length > 0 ? payments.join(', ') : 'none'}
 
-Business hours: 9am - 9pm daily
-Payment methods: Venmo, Zelle, Cash
-You are helpful, concise, and friendly.`
+Business hours: 9am–9pm. Payment methods: Venmo, Zelle, Cash. Be helpful, concise, and friendly.`
 
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
@@ -91,10 +82,7 @@ You are helpful, concise, and friendly.`
         system: systemPrompt,
         messages: chatMessages,
       })
-
-      return NextResponse.json({
-        message: response.content[0].type === 'text' ? response.content[0].text : '',
-      })
+      return NextResponse.json({ message: response.content[0].type === 'text' ? response.content[0].text : '' })
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })

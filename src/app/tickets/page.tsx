@@ -18,7 +18,9 @@ interface TicketItem {
   dueDate?: string
   price?: number
   notifiedReady: boolean
-  customer: { id: string; name: string; phone?: string }
+  customerId: string
+  customerName: string
+  customerPhone?: string
 }
 
 const STATUS_FILTERS = [
@@ -134,7 +136,7 @@ function TicketsContent() {
                       {ticket.ticketNumber}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-900">{ticket.customer.name}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">{ticket.customerName}</td>
                   <td className="px-4 py-3 text-sm text-gray-700">
                     {ticket.garmentType}
                     {ticket.description && <span className="text-gray-400 ml-1">({ticket.description})</span>}
